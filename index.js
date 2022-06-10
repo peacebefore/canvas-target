@@ -1,6 +1,11 @@
 const canvas = document.querySelector('canvas');
 const c = canvas.getContext('2d');
 const scoreEl = document.querySelector('#scoreEl');
+const modelEl = document.querySelector('#modelEl');
+const modelScoreEl = document.querySelector('#modelScoreEl');
+const buttonEl = document.querySelector('#buttonEl');
+const startButtonEl = document.querySelector('#startButtonEl');
+const startModelEl = document.querySelector('#startModelEl');
 
 canvas.width = innerWidth;
 canvas.height = innerHeight;
@@ -102,14 +107,27 @@ class Particle {
 const x = canvas.width / 2;
 const y = canvas.height / 2;
 
-const player = new Player(x, y, 10, 'white');
-const projectiles = [];
-const enemies = [];
-const particles = [];
+let player = new Player(x, y, 10, 'white');
+let projectiles = [];
+let enemies = [];
+let particles = [];
+let animationId;
+let intervalId;
+let score = 0;
+
+function init() {
+  player = new Player(x, y, 10, 'white');
+  projectiles = [];
+  enemies = [];
+  particles = [];
+  animationId;
+  score = 0;
+  scoreEl.innerHTML = 0;
+}
 
 function spawnEnemies() {
-  setInterval(() => {
-    const radius = Math.random() * (30 - 4) + 4;
+  intervalId = setInterval(() => {
+    const radius = Math.random() * (30 - 5) + 5;
 
     let x;
     let y;
@@ -134,23 +152,23 @@ function spawnEnemies() {
   }, 1000);
 }
 
-let animationId;
-let score = 0;
 function animate() {
   animationId = requestAnimationFrame(animate);
   c.fillStyle = 'rgba(0, 0, 0, 0.1)';
   c.fillRect(0, 0, canvas.width, canvas.height);
   player.draw();
 
-  particles.forEach((particle, index) => {
+  for (let index = particles.length - 1; index >= 0; index--) {
+    const particle = particles[index];
     if (particle.alpha <= 0) {
       particles.splice(index, 1);
     } else {
       particle.update();
     }
-  });
+  }
 
-  projectiles.forEach((projectile, index) => {
+  for (let index = projectiles.length - 1; index >= 0; index--) {
+    const projectile = projectiles[index];
     projectile.update();
 
     // remove from edges of screen
@@ -160,13 +178,12 @@ function animate() {
       projectile.y + projectile.radius < 0 ||
       projectile.y - projectile.radius > canvas.height
     ) {
-      setTimeout(() => {
-        projectiles.splice(index, 1);
-      }, 0);
+      projectiles.splice(index, 1);
     }
-  });
+  }
 
-  enemies.forEach((enemy, index) => {
+  for (let index = enemies.length - 1; index >= 0; index--) {
+    const enemy = enemies[index];
     enemy.update();
 
     const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
@@ -174,9 +191,22 @@ function animate() {
     // end game
     if (dist - enemy.radius - player.radius < 1) {
       cancelAnimationFrame(animationId);
+      clearInterval(intervalId);
+      modelEl.style.display = 'block';
+      gsap.fromTo(
+        '#modelEl',
+        { scale: 0.8, opacity: 0 },
+        { scale: 1, opacity: 1, ease: 'expo' }
+      );
+      modelScoreEl.innerHTML = score;
     }
 
-    projectiles.forEach((projectile, projectileIndex) => {
+    for (
+      let projectilesIndex = projectiles.length - 1;
+      projectilesIndex >= 0;
+      projectilesIndex--
+    ) {
+      const projectile = projectiles[projectilesIndex];
       const dist = Math.hypot(projectile.x - enemy.x, projectile.y - enemy.y);
 
       // when projectiles touch enemy
@@ -197,27 +227,23 @@ function animate() {
           );
         }
         // this is where we strink our enemy
-        if (enemy.radius - 10 > 5) {
+        if (enemy.radius - 10 > 6) {
           score += 100;
           scoreEl.innerHTML = score;
           gsap.to(enemy, {
             radius: enemy.radius - 10,
           });
-          setTimeout(() => {
-            projectiles.splice(projectileIndex, 1);
-          }, 0);
+          projectiles.splice(projectileIndex, 1);
         } else {
           // remove enemy if they are too small
           score += 150;
           scoreEl.innerHTML = score;
-          setTimeout(() => {
-            enemies.splice(index, 1);
-            projectiles.splice(projectileIndex, 1);
-          }, 0);
+          enemies.splice(index, 1);
+          projectiles.splice(projectileIndex, 1);
         }
       }
-    });
-  });
+    }
+  }
 }
 
 addEventListener('click', (event) => {
@@ -236,5 +262,33 @@ addEventListener('click', (event) => {
   );
 });
 
-animate();
-spawnEnemies();
+// restart game
+buttonEl.addEventListener('click', () => {
+  init();
+  animate();
+  spawnEnemies();
+  gsap.to('#startModelEl', {
+    opacity: 0,
+    scale: 0.8,
+    duration: 0.2,
+    ease: 'expo.in',
+    onComplete: () => {
+      modelEl.style.display = 'none';
+    },
+  });
+});
+
+startButtonEl.addEventListener('click', () => {
+  init();
+  animate();
+  spawnEnemies();
+  gsap.to('#startModelEl', {
+    opacity: 0,
+    scale: 0.8,
+    duration: 0.2,
+    ease: 'expo.in',
+    onComplete: () => {
+      startModelEl.style.display = 'none';
+    },
+  });
+});
