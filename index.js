@@ -1,108 +1,15 @@
 const canvas = document.querySelector('canvas');
 const c = canvas.getContext('2d');
+
 const scoreEl = document.querySelector('#scoreEl');
-const modelEl = document.querySelector('#modelEl');
-const modelScoreEl = document.querySelector('#modelScoreEl');
+const modalEl = document.querySelector('#modalEl');
+const modalScoreEl = document.querySelector('#modalScoreEl');
 const buttonEl = document.querySelector('#buttonEl');
 const startButtonEl = document.querySelector('#startButtonEl');
-const startModelEl = document.querySelector('#startModelEl');
+const startModalEl = document.querySelector('#startModalEl');
 
 canvas.width = innerWidth;
 canvas.height = innerHeight;
-
-class Player {
-  constructor(x, y, radius, color) {
-    this.x = x;
-    this.y = y;
-    this.radius = radius;
-    this.color = color;
-  }
-
-  draw() {
-    c.beginPath();
-    c.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false);
-    c.fillStyle = this.color;
-    c.fill();
-  }
-}
-
-class Projectile {
-  constructor(x, y, radius, color, velocity) {
-    this.x = x;
-    this.y = y;
-    this.radius = radius;
-    this.color = color;
-    this.velocity = velocity;
-  }
-
-  draw() {
-    c.beginPath();
-    c.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false);
-    c.fillStyle = this.color;
-    c.fill();
-  }
-
-  update() {
-    this.draw();
-    this.x = this.x + this.velocity.x;
-    this.y = this.y + this.velocity.y;
-  }
-}
-
-class Enemy {
-  constructor(x, y, radius, color, velocity) {
-    this.x = x;
-    this.y = y;
-    this.radius = radius;
-    this.color = color;
-    this.velocity = velocity;
-  }
-
-  draw() {
-    c.beginPath();
-    c.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false);
-    c.fillStyle = this.color;
-    c.fill();
-  }
-
-  update() {
-    this.draw();
-    this.x = this.x + this.velocity.x;
-    this.y = this.y + this.velocity.y;
-  }
-}
-
-const friction = 0.99;
-
-class Particle {
-  constructor(x, y, radius, color, velocity) {
-    this.x = x;
-    this.y = y;
-    this.radius = radius;
-    this.color = color;
-    this.velocity = velocity;
-    this.alpha = 1;
-  }
-
-  draw() {
-    c.save();
-    c.globalAlpha = this.alpha;
-    c.beginPath();
-    c.arc(this.x, this.y, this.radius, 0, Math.PI * 2, false);
-    c.fillStyle = this.color;
-    c.fill();
-    c.restore();
-  }
-
-  update() {
-    this.draw();
-    this.velocity.x *= friction;
-    this.velocity.y *= friction;
-    this.x = this.x + this.velocity.x;
-    this.y = this.y + this.velocity.y;
-    this.alpha -= 0.01;
-  }
-}
 
 const x = canvas.width / 2;
 const y = canvas.height / 2;
@@ -114,20 +21,48 @@ let particles = [];
 let animationId;
 let intervalId;
 let score = 0;
+let powerUps = [];
+let frames = 0;
+let backgroundParticles = [];
+let game = {
+  active: false,
+};
 
 function init() {
   player = new Player(x, y, 10, 'white');
   projectiles = [];
   enemies = [];
   particles = [];
+  powerUps = [];
   animationId;
   score = 0;
   scoreEl.innerHTML = 0;
+  frames = 0;
+  backgroundParticles = [];
+  game = {
+    active: true,
+  };
+
+  const spacing = 30;
+
+  for (let x = 0; x < canvas.width + spacing; x += spacing) {
+    for (let y = 0; y < canvas.height + spacing; y += spacing) {
+      backgroundParticles.push(
+        new BackgroundParticle({
+          position: {
+            x,
+            y,
+          },
+          radius: 3,
+        })
+      );
+    }
+  }
 }
 
 function spawnEnemies() {
   intervalId = setInterval(() => {
-    const radius = Math.random() * (30 - 5) + 5;
+    const radius = Math.random() * (30 - 4) + 4;
 
     let x;
     let y;
@@ -139,6 +74,7 @@ function spawnEnemies() {
       x = Math.random() * canvas.width;
       y = Math.random() < 0.5 ? 0 - radius : canvas.height + radius;
     }
+
     const color = `hsl(${Math.random() * 360}, 50%, 50%)`;
 
     const angle = Math.atan2(canvas.height / 2 - y, canvas.width / 2 - x);
@@ -152,14 +88,124 @@ function spawnEnemies() {
   }, 1000);
 }
 
+function spawnPowerUps() {
+  spawnPowerUpsId = setInterval(() => {
+    powerUps.push(
+      new PowerUp({
+        position: {
+          x: -30,
+          y: Math.random() * canvas.height,
+        },
+        velocity: {
+          x: Math.random() + 2,
+          y: 0,
+        },
+      })
+    );
+  }, 10000);
+}
+
+function createScoreLabel({ position, score }) {
+  const scoreLabel = document.createElement('label');
+  scoreLabel.innerHTML = score;
+  scoreLabel.style.color = 'white';
+  scoreLabel.style.position = 'absolute';
+  scoreLabel.style.left = position.x + 'px';
+  scoreLabel.style.top = position.y + 'px';
+  scoreLabel.style.userSelect = 'none';
+  document.body.appendChild(scoreLabel);
+
+  gsap.to(scoreLabel, {
+    opacity: 0,
+    y: -30,
+    duration: 0.75,
+    onComplete: () => {
+      scoreLabel.parentNode.removeChild(scoreLabel);
+    },
+  });
+}
+
 function animate() {
   animationId = requestAnimationFrame(animate);
   c.fillStyle = 'rgba(0, 0, 0, 0.1)';
   c.fillRect(0, 0, canvas.width, canvas.height);
-  player.draw();
+  frames++;
+
+  backgroundParticles.forEach((backgroundParticle) => {
+    backgroundParticle.draw();
+
+    const dist = Math.hypot(
+      player.x - backgroundParticle.position.x,
+      player.y - backgroundParticle.position.y
+    );
+
+    if (dist < 100) {
+      backgroundParticle.alpha = 0;
+
+      if (dist > 70) {
+        backgroundParticle.alpha = 0.5;
+      }
+    } else if (dist > 100 && backgroundParticle.alpha < 0.1) {
+      backgroundParticle.alpha += 0.01;
+    } else if (dist > 100 && backgroundParticle.alpha > 0.1) {
+      backgroundParticle.alpha -= 0.01;
+    }
+  });
+
+  player.update();
+
+  for (let i = powerUps.length - 1; i >= 0; i--) {
+    const powerUp = powerUps[i];
+
+    if (powerUp.position.x > canvas.width) {
+      powerUps.splice(i, 1);
+    } else powerUp.update();
+
+    const dist = Math.hypot(
+      player.x - powerUp.position.x,
+      player.y - powerUp.position.y
+    );
+
+    // gain power up
+    if (dist < powerUp.image.height / 2 + player.radius) {
+      powerUps.splice(i, 1);
+      player.powerUp = 'MachineGun';
+      player.color = 'yellow';
+      audio.powerUpNoise.play();
+
+      // power up runs out
+      setTimeout(() => {
+        player.powerUp = null;
+        player.color = 'white';
+      }, 5000);
+    }
+  }
+
+  // machine gun animation / implementation
+  if (player.powerUp === 'MachineGun') {
+    const angle = Math.atan2(
+      mouse.position.y - player.y,
+      mouse.position.x - player.x
+    );
+    const velocity = {
+      x: Math.cos(angle) * 5,
+      y: Math.sin(angle) * 5,
+    };
+
+    if (frames % 2 === 0) {
+      projectiles.push(
+        new Projectile(player.x, player.y, 5, 'yellow', velocity)
+      );
+    }
+
+    if (frames % 5 === 0) {
+      audio.shoot.play();
+    }
+  }
 
   for (let index = particles.length - 1; index >= 0; index--) {
     const particle = particles[index];
+
     if (particle.alpha <= 0) {
       particles.splice(index, 1);
     } else {
@@ -169,11 +215,12 @@ function animate() {
 
   for (let index = projectiles.length - 1; index >= 0; index--) {
     const projectile = projectiles[index];
+
     projectile.update();
 
     // remove from edges of screen
     if (
-      projectile.x + projectile.radius < 0 ||
+      projectile.x - projectile.radius < 0 ||
       projectile.x - projectile.radius > canvas.width ||
       projectile.y + projectile.radius < 0 ||
       projectile.y - projectile.radius > canvas.height
@@ -184,6 +231,7 @@ function animate() {
 
   for (let index = enemies.length - 1; index >= 0; index--) {
     const enemy = enemies[index];
+
     enemy.update();
 
     const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
@@ -192,13 +240,20 @@ function animate() {
     if (dist - enemy.radius - player.radius < 1) {
       cancelAnimationFrame(animationId);
       clearInterval(intervalId);
-      modelEl.style.display = 'block';
+      audio.death.play();
+      game.active = false;
+
+      modalEl.style.display = 'block';
       gsap.fromTo(
-        '#modelEl',
+        '#modalEl',
         { scale: 0.8, opacity: 0 },
-        { scale: 1, opacity: 1, ease: 'expo' }
+        {
+          scale: 1,
+          opacity: 1,
+          ease: 'expo',
+        }
       );
-      modelScoreEl.innerHTML = score;
+      modalScoreEl.innerHTML = score;
     }
 
     for (
@@ -207,12 +262,13 @@ function animate() {
       projectilesIndex--
     ) {
       const projectile = projectiles[projectilesIndex];
+
       const dist = Math.hypot(projectile.x - enemy.x, projectile.y - enemy.y);
 
       // when projectiles touch enemy
       if (dist - enemy.radius - projectile.radius < 1) {
+        // create explosions
         for (let i = 0; i < enemy.radius * 2; i++) {
-          // create explosions
           particles.push(
             new Particle(
               projectile.x,
@@ -221,25 +277,55 @@ function animate() {
               enemy.color,
               {
                 x: (Math.random() - 0.5) * (Math.random() * 6),
-                y: Math.random() - 0.5 * (Math.random() * 6),
+                y: (Math.random() - 0.5) * (Math.random() * 6),
               }
             )
           );
         }
-        // this is where we strink our enemy
-        if (enemy.radius - 10 > 6) {
+        // this is where we shrink our enemy
+        if (enemy.radius - 10 > 5) {
+          audio.damageTaken.play();
           score += 100;
           scoreEl.innerHTML = score;
           gsap.to(enemy, {
             radius: enemy.radius - 10,
           });
-          projectiles.splice(projectileIndex, 1);
+          createScoreLabel({
+            position: {
+              x: projectile.x,
+              y: projectile.y,
+            },
+            score: 100,
+          });
+          projectiles.splice(projectilesIndex, 1);
         } else {
           // remove enemy if they are too small
+          audio.explode.play();
           score += 150;
           scoreEl.innerHTML = score;
+          createScoreLabel({
+            position: {
+              x: projectile.x,
+              y: projectile.y,
+            },
+            score: 150,
+          });
+
+          // change background particle colors
+          backgroundParticles.forEach((backgroundParticle) => {
+            gsap.set(backgroundParticle, {
+              color: 'white',
+              alpha: 1,
+            });
+            gsap.to(backgroundParticle, {
+              color: enemy.color,
+              alpha: 0.1,
+            });
+            // backgroundParticle.color = enemy.color
+          });
+
           enemies.splice(index, 1);
-          projectiles.splice(projectileIndex, 1);
+          projectiles.splice(projectilesIndex, 1);
         }
       }
     }
@@ -247,48 +333,85 @@ function animate() {
 }
 
 addEventListener('click', (event) => {
-  const angle = Math.atan2(
-    event.clientY - canvas.height / 2,
-    event.clientX - canvas.width / 2
-  );
+  if (!audio.background.playing()) {
+    audio.background.play();
+  }
 
-  const velocity = {
-    x: Math.cos(angle) * 5,
-    y: Math.sin(angle) * 5,
-  };
+  if (game.active) {
+    const angle = Math.atan2(
+      event.clientY - player.y,
+      event.clientX - player.x
+    );
+    const velocity = {
+      x: Math.cos(angle) * 5,
+      y: Math.sin(angle) * 5,
+    };
+    projectiles.push(new Projectile(player.x, player.y, 5, 'white', velocity));
 
-  projectiles.push(
-    new Projectile(canvas.width / 2, canvas.height / 2, 5, 'white', velocity)
-  );
+    audio.shoot.play();
+  }
+});
+
+const mouse = {
+  position: {
+    x: 0,
+    y: 0,
+  },
+};
+addEventListener('mousemove', (event) => {
+  mouse.position.x = event.clientX;
+  mouse.position.y = event.clientY;
 });
 
 // restart game
 buttonEl.addEventListener('click', () => {
+  audio.select.play();
   init();
   animate();
   spawnEnemies();
-  gsap.to('#startModelEl', {
+  spawnPowerUps();
+  gsap.to('#modalEl', {
     opacity: 0,
     scale: 0.8,
     duration: 0.2,
     ease: 'expo.in',
     onComplete: () => {
-      modelEl.style.display = 'none';
+      modalEl.style.display = 'none';
     },
   });
 });
 
 startButtonEl.addEventListener('click', () => {
+  audio.select.play();
   init();
   animate();
   spawnEnemies();
-  gsap.to('#startModelEl', {
+  spawnPowerUps();
+  // startModalEl.style.display = 'none'
+  gsap.to('#startModalEl', {
     opacity: 0,
     scale: 0.8,
     duration: 0.2,
     ease: 'expo.in',
     onComplete: () => {
-      startModelEl.style.display = 'none';
+      startModalEl.style.display = 'none';
     },
   });
+});
+
+window.addEventListener('keydown', (event) => {
+  switch (event.key) {
+    case 'd':
+      player.velocity.x += 1;
+      break;
+    case 'w':
+      player.velocity.y -= 1;
+      break;
+    case 'a':
+      player.velocity.x -= 1;
+      break;
+    case 's':
+      player.velocity.y += 1;
+      break;
+  }
 });
