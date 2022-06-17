@@ -2,7 +2,7 @@
 
 ## Game Play
 Game includes: 
-- 8-bit Audio - Background music & fun in-game audio
+- 8-bit Audio - Background music, in-game audio, and option to mute/unmute
 - Power-ups - A machine-gun lightning power-up
 - Enemies - A mix of homing, spinning, and homing-spinning enemies 
 - Colors - Background particles change to reflect which enemy was hit 
